@@ -21,13 +21,13 @@ module Fastlane
             params[:team_name],
             params[:signing_identity],
             params[:adhoc] ? params[:adhoc] : false,
-            params[:brand_build]
+            params[:app_version]
           ),
           dsym_path: brand_dsym(
             File.expand_path(params[:dsym_path]),
             config,
             params[:adhoc] ? params[:adhoc] : false,
-            params[:brand_build]
+            params[:app_version]
           )
         }
       end
@@ -84,8 +84,8 @@ module Fastlane
                                   optional: true,
                                  is_string: false,
                              default_value: false),
-          FastlaneCore::ConfigItem.new(key: :brand_build,
-                               description: "Appended to base build number",
+          FastlaneCore::ConfigItem.new(key: :app_version,
+                               description: "App Store version, CFBundleShortVersionString",
                                   optional: true)
         ]
       end
@@ -100,7 +100,7 @@ module Fastlane
         UI.message path + ' file verified'
       end
 
-      def self.brand_dsym(dsym_path, config, adhoc, brand_build)
+      def self.brand_dsym(dsym_path, config, adhoc, app_version)
         Dir.mktmpdir do |tmp_dir|
           dsym_bundle_id = 'com.apple.xcode.dsym.' + config['CFBundleIdentifier'] + (adhoc ? '.adhoc' : '')
           brand_basename = config["basename"]
@@ -117,7 +117,7 @@ module Fastlane
             value: dsym_bundle_id
           )
 
-          append_brand_build(plist_path, brand_build)
+          set_app_version(plist_path, app_version)
 
           # create brand specific dSYM
           dsym_archive_path = File.expand_path(brand_basename + '.app.dSYM.zip')
@@ -126,7 +126,7 @@ module Fastlane
         end
       end
 
-      def self.brand_ipa(ipa_path, config, localization_source_path, asset_source_path, team_name, signing_identity, adhoc, brand_build)
+      def self.brand_ipa(ipa_path, config, localization_source_path, asset_source_path, team_name, signing_identity, adhoc, app_version)
         UI.message 'Applying ' + config["basename"] + ' IPA branding'
 
         Dir.mktmpdir do |tmp_dir|
@@ -157,7 +157,7 @@ module Fastlane
           plist_path = File.join(app_path, 'Info.plist')
 
           # apply brand specific configuration
-          apply_config(plist_path, config, adhoc, brand_build)
+          apply_config(plist_path, config, adhoc, app_version)
 
           # copy image assets
           FileUtils.cp_r File.join(asset_source_path, '.'), app_path
@@ -194,7 +194,7 @@ module Fastlane
         end
       end
 
-      def self.apply_config(plist_path, config, adhoc, brand_build)
+      def self.apply_config(plist_path, config, adhoc, app_version)
         sh 'plutil -convert xml1 ' + plist_path
 
         other_action.set_info_plist_value(
@@ -209,23 +209,17 @@ module Fastlane
           value: config["BRAND_CONFIG"]
         )
 
-        append_brand_build(plist_path, brand_build)
+        set_app_version(plist_path, app_version)
 
         sh 'plutil -convert binary1 ' + plist_path
       end
 
-      def self.append_brand_build(plist_path, brand_build)
-        unless brand_build.nil?
-          build_number = other_action.get_info_plist_value(
-            path: plist_path,
-            key: "CFBundleVersion"
-          )
-          other_action.set_info_plist_value(
-            path: plist_path,
-            key: "CFBundleVersion",
-            value: build_number + '.' + brand_build
-          )
-        end
+      def self.set_app_version(plist_path, app_version)
+        other_action.set_info_plist_value(
+          path: plist_path,
+          key: "CFBundleShortVersionString",
+          value: app_version
+        )
       end
     end
   end
